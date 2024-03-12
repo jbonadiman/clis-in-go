@@ -25,6 +25,7 @@ func main() {
 	add := flag.Bool("add", false, "add task to the to-do list")
 	list := flag.Bool("list", false, "list all tasks")
 	complete := flag.Int("complete", 0, "item to be completed")
+	delete := flag.Int("del", 0, "item to be deleted")
 
 	flag.Parse()
 
@@ -62,6 +63,17 @@ func main() {
 		}
 
 		l.Add(t)
+
+		if err := l.Save(todoFileName); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+
+	case *delete > 0:
+		if err := l.Delete(*delete); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 
 		if err := l.Save(todoFileName); err != nil {
 			fmt.Fprintln(os.Stderr, err)
