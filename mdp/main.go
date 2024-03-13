@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
@@ -16,45 +18,53 @@ import (
 )
 
 const (
-	header = `<!DOCTYPE html>
+	defaultTemplate = `<!DOCTYPE html>
 <html>
 
 <head>
   <meta http-equiv="content-type" content="text/html; charset=utf-8">
-  <title>Markdown Preview Tool</title>
+  <title>{{ .Title }}</title>
 </head>
 
 <body>
-`
-
-	footer = `</body>
+{{ .Body }}
+</body>
 
 </html>
 `
 )
 
+type content struct {
+	Title string
+	Body  template.HTML
+}
+
 func main() {
 	filename := flag.String("file", "", "markdown file to preview")
 	skipPreview := flag.Bool("s", false, "skip auto-preview")
+	tFname := flag.String("t", "", "alternate template name")
 	flag.Parse()
 
 	if *filename == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
-	if err := run(*filename, os.Stdout, *skipPreview); err != nil {
+	if err := run(*filename, *tFname, os.Stdout, *skipPreview); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(filename string, out io.Writer, skipPreview bool) error {
+func run(filename, tFname string, out io.Writer, skipPreview bool) error {
 	input, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
 
-	htmlData := parseContent(input)
+	htmlData, err := parseContent(input, tFname)
+	if err != nil {
+		return err
+	}
 
 	temp, err := os.CreateTemp("", "mdp*.html")
 	if err != nil {
@@ -75,10 +85,14 @@ func run(filename string, out io.Writer, skipPreview bool) error {
 		return nil
 	}
 
+	defer os.Remove(outName)
+
 	return preview(outName)
 }
 
-func parseContent(input []byte) []byte {
+func parseContent(input []byte, tFname string) ([]byte, error) {
+	var buf bytes.Buffer
+
 	md := goldmark.New(
 		goldmark.WithExtensions(extension.GFM),
 		goldmark.WithRendererOptions(
@@ -86,7 +100,6 @@ func parseContent(input []byte) []byte {
 		),
 	)
 
-	var buf bytes.Buffer
 	if err := md.Convert(input, &buf); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -94,12 +107,29 @@ func parseContent(input []byte) []byte {
 
 	body := bluemonday.UGCPolicy().SanitizeBytes(buf.Bytes())
 
-	buf.Reset()
-	buf.WriteString(header)
-	buf.Write(body)
-	buf.WriteString(footer)
+	t, err := template.New("mdp").Parse(defaultTemplate)
+	if err != nil {
+		return nil, err
+	}
 
-	return buf.Bytes()
+	if tFname != "" {
+		t, err = template.ParseFiles(tFname)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	c := content{
+		Title: "Markdown Preview Tool",
+		Body:  template.HTML(body),
+	}
+
+	buf.Reset()
+	if err := t.Execute(&buf, c); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 func saveHTML(outFname string, data []byte) error {
@@ -128,5 +158,8 @@ func preview(fname string) error {
 		return err
 	}
 
-	return exec.Command(cPath, cParams...).Run()
+	err = exec.Command(cPath, cParams...).Run()
+
+	time.Sleep(2 * time.Second)
+	return err
 }
