@@ -13,8 +13,6 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/renderer/html"
 )
 
 const (
@@ -93,14 +91,7 @@ func run(filename, tFname string, out io.Writer, skipPreview bool) error {
 func parseContent(input []byte, tFname string) ([]byte, error) {
 	var buf bytes.Buffer
 
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
-		goldmark.WithRendererOptions(
-			html.WithUnsafe(),
-		),
-	)
-
-	if err := md.Convert(input, &buf); err != nil {
+	if err := goldmark.Convert(input, &buf); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
