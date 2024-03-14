@@ -25,6 +25,7 @@ const (
 </head>
 
 <body>
+<span>{{ .PreviewFile }}</span>
 {{ .Body }}
 </body>
 
@@ -33,8 +34,9 @@ const (
 )
 
 type content struct {
-	Title string
-	Body  template.HTML
+	Title       string
+	Body        template.HTML
+	PreviewFile string
 }
 
 func main() {
@@ -59,7 +61,7 @@ func run(filename, tFname string, out io.Writer, skipPreview bool) error {
 		return err
 	}
 
-	htmlData, err := parseContent(input, tFname)
+	htmlData, err := parseContent(input, tFname, filename)
 	if err != nil {
 		return err
 	}
@@ -88,7 +90,7 @@ func run(filename, tFname string, out io.Writer, skipPreview bool) error {
 	return preview(outName)
 }
 
-func parseContent(input []byte, tFname string) ([]byte, error) {
+func parseContent(input []byte, tFname string, filename string) ([]byte, error) {
 	var buf bytes.Buffer
 
 	if err := goldmark.Convert(input, &buf); err != nil {
@@ -111,8 +113,9 @@ func parseContent(input []byte, tFname string) ([]byte, error) {
 	}
 
 	c := content{
-		Title: "Markdown Preview Tool",
-		Body:  template.HTML(body),
+		Title:       "Markdown Preview Tool",
+		Body:        template.HTML(body),
+		PreviewFile: filename,
 	}
 
 	buf.Reset()
